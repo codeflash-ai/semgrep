@@ -5,24 +5,6 @@ let string_of_type (ty : IL.type_) =
   | TyN (Id (id, _)) -> fst id
   | __else__ -> "<TYPE>"
 
-let string_of_base base =
-  match base with
-  | Var x -> str_of_name x
-  | VarSpecial _ -> "<VarSpecial>"
-  | Mem _ -> "<Mem>"
-
-let string_of_offset offset =
-  match offset.o with
-  | Dot a -> ident_str_of_name a
-  | Index _ -> "[...]"
-
-let string_of_lval { base; rev_offset } =
-  string_of_base base
-  ^
-  if rev_offset <> [] then
-    "." ^ String.concat "." (List.rev_map string_of_offset rev_offset)
-  else ""
-
 let string_of_literal (lit : AST_generic.literal) =
   match lit with
   | Bool (b, _) -> string_of_bool b
@@ -42,7 +24,25 @@ let string_of_literal (lit : AST_generic.literal) =
   | Imag _ -> "<IMAG>"
   | Ratio _ -> "<RATIO>"
 
-let rec string_of_exp_kind e =
+let rec string_of_base base =
+  match base with
+  | Var x -> str_of_name x
+  | VarSpecial _ -> "<VarSpecial>"
+  | Mem e -> Common.spf "*(%s)" (string_of_exp e)
+
+and string_of_offset offset =
+  match offset.o with
+  | Dot a -> ident_str_of_name a
+  | Index _ -> "[...]"
+
+and string_of_lval { base; rev_offset } =
+  string_of_base base
+  ^
+  if rev_offset <> [] then
+    "." ^ String.concat "." (List.rev_map string_of_offset rev_offset)
+  else ""
+
+and string_of_exp_kind e =
   match e with
   | Fetch l -> string_of_lval l
   | Literal lit -> string_of_literal lit

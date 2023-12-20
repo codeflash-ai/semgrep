@@ -186,14 +186,17 @@ let mk_aux_var ?str env tok exp =
       add_instr env (mk_i (Assign (lval, exp)) NoOrig);
       (var, lval)
 
-let add_call env tok eorig ~void mk_call =
-  if void then (
-    add_instr env (mk_i (mk_call None) eorig);
-    mk_unit tok NoOrig)
-  else
-    let lval = fresh_lval env tok in
-    add_instr env (mk_i (mk_call (Some lval)) eorig);
-    mk_e (Fetch lval) NoOrig
+let add_call env tok eorig ~ret mk_call =
+  let opt_lval =
+    match ret with
+    | `Void -> None
+    | `To lval -> Some lval
+    | `Yes -> Some (fresh_lval env tok)
+  in
+  add_instr env (mk_i (mk_call opt_lval) eorig);
+  match opt_lval with
+  | None -> mk_unit tok NoOrig
+  | Some lval -> mk_e (Fetch lval) NoOrig
 
 let add_stmt env st = Stack_.push st env.stmts
 let add_stmts env xs = xs |> List.iter (add_stmt env)
@@ -511,40 +514,49 @@ and assign env lhs tok rhs_exp e_gen =
 (* We set `void` to `true` when the value of the expression is being discarded, in
  * which case, for certain expressions and in certain languages, we assume that the
  * expression has side-effects. See translation of operators below. *)
-and expr_aux env ?(void = false) e_gen =
+and expr_aux env ?(ret = `Yes) e_gen =
   let eorig = SameAs e_gen in
   match e_gen.G.e with
   | G.Call
       ( { e = G.IdSpecial (G.Op ((G.And | G.Or) as op), tok); _ },
         (_, arg0 :: args, _) )
-    when not void ->
+    when ret <> `Void ->
       expr_lazy_op env op tok arg0 args eorig
   (* args_with_pre_stmts *)
   | G.Call ({ e = G.IdSpecial (G.Op op, tok); _ }, args) -> (
       let args = arguments env (Tok.unbracket args) in
-      if not void then mk_e (Operator ((op, tok), args)) eorig
-      else
-        (* The operation's result is not being used, so it may have side-effects.
-         * We then assume this is just syntax sugar for a method call. E.g. in
-         * Ruby `s << "hello"` is syntax sugar for `s.<<("hello")` and it mutates
-         * the string `s` appending "hello" to it. *)
-        match args with
-        | [] -> impossible (G.E e_gen)
-        | obj :: args' ->
-            let obj_var, _obj_lval =
-              mk_aux_var env tok (IL_helpers.exp_of_arg obj)
-            in
-            let method_name = fresh_var env tok ~str:(Tok.content_of_tok tok) in
-            let offset = { o = Dot method_name; oorig = NoOrig } in
-            let method_lval = { base = Var obj_var; rev_offset = [ offset ] } in
-            let method_ = { e = Fetch method_lval; eorig = related_tok tok } in
-            add_call env tok eorig ~void (fun res -> Call (res, method_, args'))
-      )
+      match ret with
+      | `Yes
+      | `To _ ->
+          mk_e (Operator ((op, tok), args)) eorig
+      | `Void -> (
+          (* The operation's result is not being used, so it may have side-effects.
+           * We then assume this is just syntax sugar for a method call. E.g. in
+           * Ruby `s << "hello"` is syntax sugar for `s.<<("hello")` and it mutates
+           * the string `s` appending "hello" to it. *)
+          match args with
+          | [] -> impossible (G.E e_gen)
+          | obj :: args' ->
+              let obj_var, _obj_lval =
+                mk_aux_var env tok (IL_helpers.exp_of_arg obj)
+              in
+              let method_name =
+                fresh_var env tok ~str:(Tok.content_of_tok tok)
+              in
+              let offset = { o = Dot method_name; oorig = NoOrig } in
+              let method_lval =
+                { base = Var obj_var; rev_offset = [ offset ] }
+              in
+              let method_ =
+                { e = Fetch method_lval; eorig = related_tok tok }
+              in
+              add_call env tok eorig ~ret (fun res ->
+                  Call (res, method_, args'))))
   | G.Call
       ( ({ e = G.IdSpecial ((G.This | G.Super | G.Self | G.Parent), tok); _ } as
          e),
         args ) ->
-      call_generic env ~void tok eorig e args
+      call_generic env ~ret tok eorig e args
   | G.Call
       ({ e = G.IdSpecial (G.IncrDecr (incdec, _prepostIGNORE), tok); _ }, args)
     -> (
@@ -643,15 +655,15 @@ and expr_aux env ?(void = false) e_gen =
       let args = arguments env (Tok.unbracket args) in
       try
         let special = call_special env spec in
-        add_call env tok eorig ~void (fun res ->
+        add_call env tok eorig ~ret (fun res ->
             CallSpecial (res, special, args))
       with
       | Fixme (kind, any_generic) ->
           let fixme = fixme_exp kind any_generic (related_exp e_gen) in
-          add_call env tok eorig ~void (fun res -> Call (res, fixme, args)))
+          add_call env tok eorig ~ret (fun res -> Call (res, fixme, args)))
   | G.Call (e, args) ->
       let tok = G.fake "call" in
-      call_generic env ~void tok eorig e args
+      call_generic env ~ret tok eorig e args
   | G.L lit -> mk_e (Literal lit) eorig
   | G.DotAccess ({ e = N (Id (("var", _), _)); _ }, _, FN (Id ((s, t), id_info)))
     when is_hcl env.lang ->
@@ -676,13 +688,20 @@ and expr_aux env ?(void = false) e_gen =
           when env.lang =*= Lang.Ruby
                && IdentSet.mem (H.str_of_ident ident) env.ctx.entity_names ->
             let tok = G.fake "call" in
-            add_call env tok eorig ~void (fun res -> Call (res, exp, []))
+            add_call env tok eorig ~ret (fun res -> Call (res, exp, []))
         | _ -> exp
       in
       ident_function_call_hack exp
-  | G.Assign (e1, tok, e2) ->
-      let exp = expr env e2 in
-      assign env e1 tok exp e_gen
+  | G.Assign (e1, tok, e2) -> (
+      match e1.G.e with
+      | G.N n ->
+          let lval = name env n in
+          let rhs = expr env ~ret:(`To lval) e2 in
+          add_instr env (mk_i (Assign (lval, rhs)) (SameAs e_gen));
+          mk_e (Fetch lval) (SameAs e1)
+      | __else__ ->
+          let exp = expr env e2 in
+          assign env e1 tok exp e_gen)
   | G.AssignOp (e1, (G.Eq, tok), e2) ->
       (* AsssignOp(Eq) is used to represent plain assignment in some languages,
        * e.g. Go's `:=` is represented as `AssignOp(Eq)`, and C#'s assignments
@@ -841,8 +860,8 @@ and expr_aux env ?(void = false) e_gen =
       fixme_exp ToDo (G.E e_gen) (related_tok tok) ~partial
   | G.RawExpr _ -> todo (G.E e_gen)
 
-and expr env ?void e_gen =
-  try expr_aux env ?void e_gen with
+and expr env ?ret e_gen =
+  try expr_aux env ?ret e_gen with
   | Fixme (kind, any_generic) -> fixme_exp kind any_generic (related_exp e_gen)
 
 and expr_opt env = function
@@ -870,7 +889,7 @@ and expr_lazy_op env op tok arg0 args eorig =
   in
   mk_e (Operator ((op, tok), arg0' :: args')) eorig
 
-and call_generic env ?(void = false) tok eorig e args =
+and call_generic env ?(ret = `Yes) tok eorig e args =
   let e = expr env e in
   (* In theory, instrs in args could have side effect on the value in 'e',
    * but we will agglomerate all those instrs in the environment and
@@ -882,7 +901,7 @@ and call_generic env ?(void = false) tok eorig e args =
    * worth it.
    *)
   let args = arguments env (Tok.unbracket args) in
-  add_call env tok eorig ~void (fun res -> Call (res, e, args))
+  add_call env tok eorig ~ret (fun res -> Call (res, e, args))
 
 and call_special _env (x, tok) =
   ( (match x with
@@ -1144,8 +1163,8 @@ and lval_of_ent env ent =
       | [] -> raise Impossible
       | x :: _ -> fresh_lval env x)
 
-and expr_with_pre_stmts env ?void e =
-  with_pre_stmts env (fun env -> expr env ?void e)
+and expr_with_pre_stmts env ?ret e =
+  with_pre_stmts env (fun env -> expr env ?ret e)
 
 and stmt_expr_with_pre_stmts env st =
   with_pre_stmts env (fun env -> stmt_expr env st)
@@ -1258,13 +1277,13 @@ and implicit_return env eorig tok =
   (* We always expect a value from an expression that is implicitly
    * returned, so void is set to false here.
    *)
-  let ss, e = expr_with_pre_stmts ~void:false env eorig in
+  let ss, e = expr_with_pre_stmts ~ret:`Void env eorig in
   let ret = mk_s (Return (tok, e)) in
   ss @ [ ret ]
 
 and expr_stmt env (eorig : G.expr) tok : IL.stmt list =
   (* optimize? pass context to expr when no need for return value? *)
-  let ss, e = expr_with_pre_stmts ~void:true env eorig in
+  let ss, e = expr_with_pre_stmts ~ret:`Void env eorig in
 
   (* Some expressions may return unit, and if we call mk_aux_var below, not only
    * is it extraneous, but it also interferes with implicit return analysis.
@@ -1370,8 +1389,17 @@ and stmt_aux env st =
                   (SameAs new_exp)));
         ]
   | G.DefStmt (ent, G.VarDef { G.vinit = Some e; vtype = _typTODO }) ->
-      let ss, e' = expr_with_pre_stmts env e in
-      let lv = lval_of_ent env ent in
+      let ss, lv, e' =
+        match ent.name with
+        | EN n ->
+            let lv = name env n in
+            let ss, e' = expr_with_pre_stmts env ~ret:(`To lv) e in
+            (ss, lv, e')
+        | __else__ ->
+            let ss, e' = expr_with_pre_stmts env e in
+            let lv = lval_of_ent env ent in
+            (ss, lv, e')
+      in
       ss @ [ mk_s (Instr (mk_i (Assign (lv, e')) (Related (G.S st)))) ]
   | G.DefStmt
       ( ent,
