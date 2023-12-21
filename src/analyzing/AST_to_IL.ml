@@ -1232,7 +1232,9 @@ and parameters _env params : name list =
 and type_ env (ty : G.type_) : type_ =
   let exps =
     match ty.t with
-    | G.TyExpr e -> [ expr env e ]
+    | G.TyArray ((_, Some e, _), _)
+    | G.TyExpr e ->
+        [ expr env e ]
     | __TODO__ -> []
   in
   { type_ = ty; exps }
@@ -1363,7 +1365,7 @@ and stmt_aux env st =
        * variable are we assigning the `new` object, so we intercept the assignment. *)
       let obj' = var_of_name obj in
       let obj_lval = lval_of_base (Var obj') in
-      let ss, args' = args_with_pre_stmts env (Tok.unbracket args) in
+      let ss1, args' = args_with_pre_stmts env (Tok.unbracket args) in
       let opt_cons =
         let* cons = mk_class_constructor_name ty cons_id_info in
         let cons' = var_of_name cons in
@@ -1380,13 +1382,11 @@ and stmt_aux env st =
         in
         Some cons_exp
       in
-      ss
+      let ss2, ty = with_pre_stmts env (fun env -> type_ env ty) in
+      ss1 @ ss2
       @ [
           mk_s
-            (Instr
-               (mk_i
-                  (New (obj_lval, type_ env ty, opt_cons, args'))
-                  (SameAs new_exp)));
+            (Instr (mk_i (New (obj_lval, ty, opt_cons, args')) (SameAs new_exp)));
         ]
   | G.DefStmt (ent, G.VarDef { G.vinit = Some e; vtype = _typTODO }) ->
       let ss, lv, e' =
