@@ -45,7 +45,6 @@ type conf = {
   output : string option;
   output_conf : Output.conf;
   incremental_output : bool;
-  files_only : bool;
   (* Networking options *)
   metrics : Metrics_.config;
   version_check : bool;
@@ -126,7 +125,6 @@ let default : conf =
     output = None;
     output_conf = Output.default;
     incremental_output = false;
-    files_only = false;
     rewrite_rule_ids = true;
     (* will send metrics only if the user uses the registry or the app *)
     metrics = Metrics_.Auto;
@@ -1156,7 +1154,6 @@ let cmdline_term ~allow_empty_config : conf Term.t =
       output;
       output_conf;
       incremental_output;
-      files_only;
       engine_type;
       rewrite_rule_ids;
       common;
