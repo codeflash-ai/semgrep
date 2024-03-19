@@ -804,7 +804,6 @@ and evaluate_formula env opt_context ({ f; focus; conditions } : Rule.formula) =
   (ranges, new_expls)
 
 and evaluate_formula_kind env opt_context (kind : Rule.formula_kind) =
-  Logs.warn (fun m -> m ~tags "eval form kind: %a" Rule.pp_formula_kind kind);
   match kind with
   | R.P ({ XP.pid = id; pstr = pstr, tok; _ } as xpat) ->
       let match_results = Hashtbl_.get_stack env.pattern_matches id in
@@ -897,7 +896,6 @@ and evaluate_formula_kind env opt_context (kind : Rule.formula_kind) =
           (* optimization of `pattern: $X` *)
           let ranges = run_selector_on_ranges env selector_opt ranges in
 
-          Logs.warn (fun m -> m ~tags "ranges are %a" RM.pp_ranges ranges);
           (* let's remove the negative ranges *)
           let ranges, negs_expls =
             neg
