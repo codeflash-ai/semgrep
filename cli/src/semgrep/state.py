@@ -106,5 +106,4 @@ def get_state() -> SemgrepState:
     """
     Get the current CLI invocation's global state.
     """
-    ctx = get_context()
-    return ctx.ensure_object(SemgrepState)
+    return get_context().ensure_object(SemgrepState)

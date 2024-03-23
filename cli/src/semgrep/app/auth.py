@@ -53,22 +53,22 @@ def get_token() -> Optional[str]:
     - None
     """
     state = get_state()
-    if state.env.app_token is not None:
+    app_token = state.env.app_token
+    if app_token is not None:
         logger.debug(f"Using environment variable SEMGREP_APP_TOKEN as api token")
-        return state.env.app_token
+        return app_token
 
-    return _read_token_from_settings_file()
+    return _read_token_from_settings_file(state)
 
 
-def _read_token_from_settings_file() -> Optional[str]:
+def _read_token_from_settings_file(state) -> Optional[str]:
     """
     Read api token from settings file
 
     Returns None if api token not in settings file
     """
     logger.debug("Getting API token from settings file")
-    settings = get_state().settings
-    login_token = settings.get("api_token")
+    login_token = state.settings.get("api_token")
     if login_token is None:
         logger.debug("No API token found in settings file")
         return None
