@@ -18,15 +18,7 @@ def compute_executable_path(exec_name: str) -> Optional[str]:
 
     Return None if no executable found
     """
-    # First, try packaged binaries
-    try:
-        with importlib.resources.path("semgrep.bin", exec_name) as path:
-            if path.is_file():
-                return str(path)
-    except FileNotFoundError as e:
-        logger.debug(f"Failed to open resource {exec_name}: {e}.")
-
-    # Second, try system binaries in PATH.
+    # First, try system binaries in PATH.
     #
     # Environment variables, including PATH, are not inherited by the pytest
     # jobs (at least by default), so this won't work when running pytest
@@ -36,10 +28,18 @@ def compute_executable_path(exec_name: str) -> Optional[str]:
     if which_exec is not None:
         return which_exec
 
-    # Third, look for something in the same dir as the Python interpreter
+    # Second, look for something in the same dir as the Python interpreter
     relative_path = os.path.join(os.path.dirname(sys.executable), exec_name)
     if os.path.isfile(relative_path):
         return relative_path
+
+    # Last, try packaged binaries
+    try:
+        with importlib.resources.path("semgrep.bin", exec_name) as path:
+            if path.is_file():
+                return str(path)
+    except FileNotFoundError as e:
+        logger.debug(f"Failed to open resource {exec_name}: {e}.")
 
     return None
 
