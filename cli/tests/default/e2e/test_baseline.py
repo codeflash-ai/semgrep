@@ -1,3 +1,4 @@
+from contextlib import ExitStack
 import os
 import subprocess
 import tempfile
@@ -91,42 +92,39 @@ def _git_merge(ref: str) -> str:
 
 
 def run_sentinel_scan(check: bool = True, base_commit: Optional[str] = None):
-    env = {"LANG": "en_US.UTF-8"}
-    env["SEMGREP_USER_AGENT_APPEND"] = "testing"
-    unique_settings_file = tempfile.NamedTemporaryFile().name
-    Path(unique_settings_file).write_text(
-        "anonymous_user_id: 5f52484c-3f82-4779-9353-b29bbd3193b6\n"
-        "has_shown_metrics_notification: true\n"
-    )
-    env["SEMGREP_SETTINGS_FILE"] = unique_settings_file
-    env["PATH"] = os.environ.get("PATH", "")
+    env = {
+        "LANG": "en_US.UTF-8",
+        "SEMGREP_USER_AGENT_APPEND": "testing",
+        "PATH": os.environ.get("PATH", ""),
+    }
+    settings = "anonymous_user_id: 5f52484c-3f82-4779-9353-b29bbd3193b6\nhas_shown_metrics_notification: true\n"
 
-    cmd = SEMGREP_BASE_SCAN_COMMAND + [
-        "--disable-version-check",
-        "--metrics",
-        "off",
-        "-e",
-        f"$X = {SENTINEL_1}",
-        "-l",
-        "python",
-    ]
-    if base_commit:
-        cmd.extend(["--baseline-commit", base_commit])
+    with ExitStack() as stack:
+        temp_file = stack.enter_context(tempfile.NamedTemporaryFile(delete=False))
+        temp_file.write(settings.encode())
+        env["SEMGREP_SETTINGS_FILE"] = temp_file.name
 
-    try:
-        return subprocess.run(
-            cmd,
-            capture_output=True,
-            encoding="utf-8",
-            check=check,
-            env=env,
-        )
-    except subprocess.CalledProcessError as e:
-        print("STDOUT from sentinel scan subprocess:")
-        print(e.output)
-        print("STDERR from sentinel scan subprocess:")
-        print(e.stderr)
-        raise e
+        cmd = SEMGREP_BASE_SCAN_COMMAND + [
+            "--disable-version-check",
+            "--metrics",
+            "off",
+            "-e",
+            f"$X = {SENTINEL_1}",
+            "-l",
+            "python",
+        ]
+        if base_commit:
+            cmd.extend(["--baseline-commit", base_commit])
+
+        try:
+            return subprocess.run(
+                cmd, capture_output=True, encoding="utf-8", check=check, env=env
+            )
+        except subprocess.CalledProcessError as e:
+            print(
+                f"STDOUT from sentinel scan subprocess:\n{e.output}\nSTDERR from sentinel scan subprocess:\n{e.stderr}"
+            )
+            raise e
 
 
 def assert_out_match(snapshot, output, snapshot_name):
