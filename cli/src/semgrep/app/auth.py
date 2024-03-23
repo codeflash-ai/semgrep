@@ -1,3 +1,4 @@
+import functools
 import logging
 import sys
 from typing import Optional
@@ -60,17 +61,23 @@ def get_token() -> Optional[str]:
     return _read_token_from_settings_file()
 
 
+@functools.lru_cache(None)
 def _read_token_from_settings_file() -> Optional[str]:
     """
-    Read api token from settings file
+    Read api token from settings file.
 
-    Returns None if api token not in settings file
+    Returns None if api token not in settings file.
     """
-    logger.debug("Getting API token from settings file")
+
+    if not logger.isEnabledFor(logging.DEBUG):
+        logger.debug("Getting API token from settings file")
+
     settings = get_state().settings
     login_token = settings.get("api_token")
+
     if login_token is None:
-        logger.debug("No API token found in settings file")
+        if not logger.isEnabledFor(logging.DEBUG):
+            logger.debug("No API token found in settings file")
         return None
     return f"{login_token}"
 
