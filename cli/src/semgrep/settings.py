@@ -1,3 +1,5 @@
+import functools
+
 """
 Manages system settings for Semgrep
 

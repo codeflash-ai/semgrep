@@ -1,3 +1,4 @@
+import functools
 from enum import auto
 from enum import Enum
 from typing import List
@@ -106,5 +107,13 @@ def get_state() -> SemgrepState:
     """
     Get the current CLI invocation's global state.
     """
-    ctx = get_context()
+
+    @functools.lru_cache(None)
+    def cached_get_context():
+        return get_context()
+
+    ctx = cached_get_context()
     return ctx.ensure_object(SemgrepState)
+
+    def get(self, key: SettingsKeys, default: Any = None) -> Any:
+        return self._contents.get(key, default)
