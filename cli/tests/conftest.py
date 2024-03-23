@@ -2,6 +2,7 @@
 # Prelude
 ##############################################################################
 # Helper functions and classes useful for writing tests.
+import re
 import json
 import os
 import re
@@ -237,7 +238,7 @@ FLOATS = re.compile("([0-9]+).([0-9]+)")
 
 
 def mask_floats(text_output: str) -> str:
-    return re.sub(FLOATS, "x.xxx", text_output)
+    return FLOATS.sub("x.xxx", text_output)
 
 
 # ProTip: make sure your regexps can't match JSON quotes so as to keep any
