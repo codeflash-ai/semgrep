@@ -112,10 +112,8 @@ class Parser:
         Returns a tuple of the result and the unparsed remainder,
         or raises ParseError
         """
-        result = self(
-            stream,
-            Position(0, 0, 0) if isinstance(stream, str) else Position(0, -1, -1),
-        )
+        position = Position(0, 0, 0) if isinstance(stream, str) else Position(0, -1, -1)
+        result = self.wrapped_fn(stream, position)
 
         if result.status:
             return (result.value, stream[result.index.offset :])
