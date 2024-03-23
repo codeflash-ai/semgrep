@@ -1,3 +1,7 @@
+import re
+from functools import lru_cache
+from typing import Optional, Tuple
+
 """
 Parsers for pnpm-lock.yaml files
 Based on https://github.com/pnpm/spec/blob/master/lockfile/5.2.md
@@ -46,7 +50,7 @@ def parse_direct_post_6(yaml: YamlTree[YamlMap]) -> List[str]:
 
 
 def parse_package_key_post_6(key: str) -> Optional[Tuple[str, str]]:
-    match = re.compile(r"/(.+?)@([^(@]+)").match(key)
+    match = _compiled_regex().match(key)
     return match.groups() if match else None  # type: ignore
 
 
@@ -131,3 +135,8 @@ def parse_pnpm(
             )
         )
     return output, errors
+
+
+@lru_cache(maxsize=None)
+def _compiled_regex():
+    return re.compile(r"/(.+?)@([^(@]+)")
