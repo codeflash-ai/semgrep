@@ -90,7 +90,7 @@ def safe_width(width: int) -> int:
     Return a width that is at least MIN_TEXT_WIDTH to avoid
     runtime value errors.
     """
-    return max(MIN_TEXT_WIDTH, width)
+    return MIN_TEXT_WIDTH if width < MIN_TEXT_WIDTH else width
 
 
 def to_severity_indicator(
