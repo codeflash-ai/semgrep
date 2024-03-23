@@ -28,14 +28,8 @@ IGNORE_FILE_NAME = ".semgrepignore"
 logger = getLogger(__name__)
 
 
-# For some reason path.is_relative_to produces a complaint that 'PosixPath' object has no attribute 'is_relative_to'
-# So we just copy its implementation
 def path_is_relative_to(p1: Path, p2: Path) -> bool:
-    try:
-        p1.relative_to(p2)
-        return True
-    except ValueError:
-        return False
+    return str(p1).startswith(str(p2))
 
 
 ## TODO: This files duplicates the .semgrepignore functionality from semgrep-action.
