@@ -219,17 +219,24 @@ def mask_times(result_json: str) -> str:
     result = json.loads(result_json)
 
     def zero_times(value):
-        if type(value) == float:
+        value_type = type(value)
+        if value_type == float:
             return 2.022
-        elif type(value) == list:
-            return [zero_times(val) for val in value]
-        elif type(value) == dict:
-            return {k: zero_times(v) for k, v in value.items()}
+        elif value_type == list:
+            new_list = []
+            for val in value:
+                new_list.append(zero_times(val))
+            return new_list
+        elif value_type == dict:
+            for k, v in value.items():
+                value[k] = zero_times(v)
+            return value
         else:
             return value
 
     if "time" in result:
         result["time"] = zero_times(result["time"])
+
     return json.dumps(result, indent=2, sort_keys=True)
 
 
