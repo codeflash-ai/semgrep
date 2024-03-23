@@ -3,6 +3,12 @@
 ##############################################################################
 # Helper functions and classes useful for writing tests.
 import json
+import tempfile
+from typing import Sequence
+import json
+import tempfile
+from typing import Sequence
+import json
 import os
 import re
 import shlex
@@ -111,25 +117,29 @@ def load_anonymous_user_id(settings_file: Path) -> Optional[str]:
     return f"{raw_value}" if raw_value else None
 
 
-def mark_masked(obj, path):
-    path_items = path.split(".")
+def mark_masked(obj, path_items):
     key = path_items[0]
-    if len(path_items) == 1 and key in obj:
-        obj[key] = "<masked in tests>"
+    next_obj = None
+
+    if len(path_items) == 1:
+        if key in obj:
+            obj[key] = "<masked in tests>"
+        return
+
+    if key == "*":
+        next_obj = list(obj.values())
     else:
-        if key == "*":
-            next_obj = list(obj.values())
-        else:
-            next_obj = obj.get(key)
+        next_obj = obj.get(key)
         if next_obj is None:
             next_objs = []
         elif not isinstance(next_obj, list):
             next_objs = [next_obj]
         else:
             next_objs = next_obj
-        for o in next_objs:
-            if isinstance(o, dict):
-                mark_masked(o, ".".join(path_items[1:]))
+
+    for o in next_objs:
+        if isinstance(o, dict):
+            mark_masked(o, path_items[1:])
 
 
 def _clean_stdout(out):
@@ -143,6 +153,7 @@ def _clean_stdout(out):
 
 def _clean_output_if_json(output_json: str, clean_fingerprint: bool) -> str:
     """Make semgrep's output deterministic and nicer to read."""
+
     try:
         output = json.loads(output_json)
     except json.decoder.JSONDecodeError:
@@ -152,23 +163,22 @@ def _clean_output_if_json(output_json: str, clean_fingerprint: bool) -> str:
         "tool.driver.semanticVersion",
         "results.*.checks.*.matches",
     ]
+
     for path in masked_keys:
-        mark_masked(output, path)
+        mark_masked(output, path.split("."))
 
-    # The masking code below is a little complicated. We could use the
-    # regexp-based mechanism above (mark_masked) for everything to simplify
-    # the porting to osemgrep.
-
-    # Remove temp file paths
+    temp_dir = tempfile.gettempdir()
     results = output.get("results")
     if isinstance(results, Sequence):
-        # for semgrep scan output
+
         if output.get("version"):
             output["version"] = "0.42"
+
         for r in results:
             p = r.get("path")
-            if p and tempfile.gettempdir() in p:
+            if p and temp_dir in p:
                 r["path"] = "/tmp/masked/path"
+
             if clean_fingerprint:
                 r["extra"]["fingerprint"] = "0x42"
 
