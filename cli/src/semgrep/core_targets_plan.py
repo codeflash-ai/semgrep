@@ -259,17 +259,24 @@ class Plan:
             "Rules", justify="right", header_style=Style(color=None, bold=use_color)
         )
 
-        origin_counts = collections.Counter(
-            get_path(rule.metadata, ("semgrep.dev", "rule", "origin"), default="custom")
-            for rule in self.rules
-            if rule.product == with_tables_for
+        origin_counts = {}
+
+        for rule in self.rules:
+            if rule.product == with_tables_for:
+                origin = get_path(
+                    rule.metadata, ("semgrep.dev", "rule", "origin"), default="custom"
+                )
+                if origin in origin_counts:
+                    origin_counts[origin] += 1
+                else:
+                    origin_counts[origin] = 1
+
+        top_origin_counts = sorted(
+            ((k, v) for k, v in origin_counts.items()), key=lambda x: x[1], reverse=True
         )
 
-        for origin, count in sorted(
-            origin_counts.items(), key=lambda x: x[1], reverse=True
-        ):
+        for origin, count in top_origin_counts:
             origin_name = origin.replace("_", " ").capitalize()
-
             table.add_row(origin_name, str(count))
 
         return table
