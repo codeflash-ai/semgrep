@@ -410,8 +410,11 @@ class TestCase:
                 self.skipped[0]["output"] = output
 
     def is_failure(self):
-        """returns true if this test case is a failure"""
-        return sum(1 for f in self.failures if f["message"] or f["output"]) > 0
+        """Returns true if this test case is a failure"""
+        for f in self.failures:
+            if f["message"] or f["output"]:
+                return True
+        return False
 
     def is_error(self):
         """returns true if this test case is an error"""
