@@ -419,4 +419,4 @@ class TestCase:
 
     def is_skipped(self):
         """returns true if this test case has been skipped"""
-        return len(self.skipped) > 0
+        return bool(self.skipped)
