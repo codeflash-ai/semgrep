@@ -24,11 +24,7 @@ logger = getLogger(__name__)
 
 def zsplit(s: str) -> List[str]:
     """Split a string on null characters."""
-    s = s.strip("\0")
-    if s:
-        return s.split("\0")
-    else:
-        return []
+    return s.strip("\0").split("\0") if s.strip("\0") else []
 
 
 def git_check_output(command: Sequence[str], cwd: Optional[str] = None) -> str:
