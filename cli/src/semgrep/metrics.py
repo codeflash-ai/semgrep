@@ -81,14 +81,14 @@ class MetricsState(Enum):
 
 class MetricsJsonEncoder(json.JSONEncoder):
     def default(self, obj: Any) -> Any:
+        if isinstance(obj, set):
+            return list(sorted(obj))
+
         if isinstance(obj, datetime):
             return obj.astimezone().isoformat()
 
         if isinstance(obj, uuid.UUID):
             return str(obj)
-
-        if isinstance(obj, set):
-            return list(sorted(obj))
 
         return super().default(obj)
 
