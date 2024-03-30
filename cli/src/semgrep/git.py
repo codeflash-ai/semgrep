@@ -1,5 +1,4 @@
 import os
-import re
 import subprocess
 import tempfile
 import urllib
@@ -95,9 +94,10 @@ def clean_project_url(url: str) -> str:
     """
     Returns a clean version of a git project's URL, removing credentials if present
     """
-    parts = urllib.parse.urlsplit(url)
-    clean_netloc = re.sub("^.*:.*@(.+)", r"\1", parts.netloc)
-    parts = parts._replace(netloc=clean_netloc)
+    scheme, netloc, url, query, fragment = urllib.parse.urlsplit(url)
+    netloc = netloc.split("@")[-1]
+    parts = scheme, netloc, url, query, fragment
+
     return urllib.parse.urlunsplit(parts)
 
 
